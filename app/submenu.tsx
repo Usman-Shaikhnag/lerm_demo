@@ -96,6 +96,17 @@ export default function Submenu() {
             return;
         }
 
+        if (menu.action_type === 'ir.actions.client') {
+            router.push({
+                pathname: '/dashboard',
+                params: {
+                    action_id: menu.action_id?.toString(),
+                    title: menu.name,
+                },
+            });
+            return;
+        }
+
         if (!menu.model) {
             Alert.alert('No Data', 'This menu item has no associated records.');
             return;
