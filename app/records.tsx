@@ -28,7 +28,7 @@ interface RecordData {
 
 export default function Records() {
     const router = useRouter();
-    const { model, title } = useLocalSearchParams<{ model: string; title: string }>();
+    const { model, title, action_domain } = useLocalSearchParams<{ model: string; title: string; action_domain?: string }>();
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -83,6 +83,7 @@ export default function Records() {
                         search: searchQuery !== undefined ? searchQuery : search,
                         search_field: searchField,
                         group_by: groupBy,
+                        ...(action_domain ? { action_domain: JSON.parse(action_domain) } : {}),
                     },
                 }),
             });

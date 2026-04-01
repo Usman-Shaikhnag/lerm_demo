@@ -3,6 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -35,8 +37,142 @@ interface LayoutNode {
     widget?: string;
     btn_type?: string;
     btn_class?: string;
+    invisible?: string;
+    is_stat_button?: boolean;
+    stat_field?: string;
+    statusbar_visible?: string;
     children?: LayoutNode[];
     pages?: LayoutNode[];
+}
+
+/**
+ * Evaluate an Odoo 17 invisible expression against current record values.
+ * Handles common patterns:
+ *   - field_name == 'value' / field_name != 'value'
+ *   - field_name in ('a', 'b') / field_name not in ('a', 'b')
+ *   - field_name (truthy) / not field_name
+ *   - compound: expr1 and expr2, expr1 or expr2
+ * Returns true if the element should be HIDDEN.
+ * Defaults to false (visible) if expression can't be parsed.
+ */
+function evaluateInvisible(expr: string | undefined, values: Record<string, any>): boolean {
+    if (!expr) return false;
+
+    try {
+        // Handle Odoo <= 16 domain-style modifiers (JSON array)
+        if (expr.startsWith('[')) {
+            const domain = JSON.parse(expr);
+            // Simple domain: [["field", "=", "value"]] — evaluate each tuple with AND
+            return domain.every((condition: any) => {
+                if (!Array.isArray(condition) || condition.length !== 3) return false;
+                const [field, op, val] = condition;
+                const recordVal = values[field];
+                // Resolve many2one values
+                const rv = Array.isArray(recordVal) ? recordVal[0] : recordVal;
+                switch (op) {
+                    case '=': case '==': return rv == val;
+                    case '!=': case '<>': return rv != val;
+                    case 'in': return Array.isArray(val) && val.includes(rv);
+                    case 'not in': return Array.isArray(val) && !val.includes(rv);
+                    default: return false;
+                }
+            });
+        }
+
+        // Split by ' or ' first, then ' and ' within each branch
+        const orParts = expr.split(/\s+or\s+/);
+        if (orParts.length > 1) {
+            return orParts.some(part => evaluateInvisible(part.trim(), values));
+        }
+
+        const andParts = expr.split(/\s+and\s+/);
+        if (andParts.length > 1) {
+            return andParts.every(part => evaluateInvisible(part.trim(), values));
+        }
+
+        // Single expression
+        const trimmed = expr.trim();
+
+        // "field_name not in ('a', 'b', 'c')"  or  "field_name not in ['a', 'b']"
+        let match = trimmed.match(/^(\w+)\s+not\s+in\s+[\(\[](.+?)[\)\]]$/);
+        if (match) {
+            const fieldVal = resolveVal(values[match[1]]);
+            const items = parseListItems(match[2]);
+            return !items.includes(fieldVal);
+        }
+
+        // "field_name in ('a', 'b', 'c')"  or  "field_name in ['a', 'b']"
+        match = trimmed.match(/^(\w+)\s+in\s+[\(\[](.+?)[\)\]]$/);
+        if (match) {
+            const fieldVal = resolveVal(values[match[1]]);
+            const items = parseListItems(match[2]);
+            return items.includes(fieldVal);
+        }
+
+        // "field_name != 'value'" or 'field_name != "value"'
+        match = trimmed.match(/^(\w+)\s*!=\s*['"](.+?)['"]$/);
+        if (match) {
+            return resolveVal(values[match[1]]) !== match[2];
+        }
+
+        // "field_name == 'value'" or "field_name = 'value'"
+        match = trimmed.match(/^(\w+)\s*={1,2}\s*['"](.+?)['"]$/);
+        if (match) {
+            return resolveVal(values[match[1]]) === match[2];
+        }
+
+        // "field_name != True/False" or numeric comparisons
+        match = trimmed.match(/^(\w+)\s*!=\s*(True|False|\d+)$/i);
+        if (match) {
+            const fieldVal = values[match[1]];
+            const cmpVal = parseLiteral(match[2]);
+            return fieldVal != cmpVal;
+        }
+
+        match = trimmed.match(/^(\w+)\s*={1,2}\s*(True|False|\d+)$/i);
+        if (match) {
+            const fieldVal = values[match[1]];
+            const cmpVal = parseLiteral(match[2]);
+            return fieldVal == cmpVal;
+        }
+
+        // "not field_name" (falsy check — invisible when field is falsy)
+        match = trimmed.match(/^not\s+(\w+)$/);
+        if (match) {
+            return !values[match[1]];
+        }
+
+        // "field_name" (truthy check — invisible when field is truthy)
+        match = trimmed.match(/^(\w+)$/);
+        if (match) {
+            return !!values[match[1]];
+        }
+
+    } catch (e) {
+        console.warn('Could not evaluate invisible expression:', expr, e);
+    }
+    return false; // Default: visible
+}
+
+function resolveVal(v: any): any {
+    // Many2one values come as [id, name] — use the id for comparison
+    if (Array.isArray(v)) return v[0];
+    if (v === false || v === null || v === undefined) return false;
+    return v;
+}
+
+function parseListItems(s: string): any[] {
+    return s.split(',').map(item => {
+        const t = item.trim().replace(/^['"]|['"]$/g, '');
+        return t === 'True' ? true : t === 'False' ? false : isNaN(Number(t)) ? t : Number(t);
+    });
+}
+
+function parseLiteral(s: string): any {
+    if (s.toLowerCase() === 'true') return true;
+    if (s.toLowerCase() === 'false') return false;
+    const n = Number(s);
+    return isNaN(n) ? s : n;
 }
 
 export default function RecordForm() {
@@ -166,11 +302,15 @@ export default function RecordForm() {
     };
 
     // ── Call Odoo button method ──
-    const handleButtonAction = async (btnName: string, btnType: string) => {
-        if (!record_id) {
+    const handleButtonAction = async (btnName: string, btnType: string, recordIdOverride?: number, modelOverride?: string) => {
+        const targetId = recordIdOverride !== undefined ? recordIdOverride : parseInt(record_id || '0', 10);
+        const targetModel = modelOverride || model;
+
+        if (!targetId) {
             Alert.alert('Info', 'Please save the record first before using actions.');
             return;
         }
+
         try {
             const sessionId = await SecureStore.getItemAsync('session_id');
             const serverUrl = await SecureStore.getItemAsync('server_url');
@@ -186,9 +326,9 @@ export default function RecordForm() {
                     jsonrpc: '2.0',
                     method: 'call',
                     params: {
-                        model,
+                        model: targetModel,
                         method: btnName,
-                        args: [[parseInt(record_id, 10)]],
+                        args: [[targetId]],
                         kwargs: {},
                     },
                 }),
@@ -204,27 +344,74 @@ export default function RecordForm() {
 
             // Check if the button returned a wizard / action
             if (result && typeof result === 'object' && result.type === 'ir.actions.act_window') {
-                const wizardModel = result.res_model;
-                const wizardTitle = result.name || 'Wizard';
-                const wizardId = result.res_id;
+                const actionModel = result.res_model;
+                const actionTitle = result.name || title || actionModel;
+                const actionId = result.res_id;
+                const actionContext = result.context || {};
 
                 if (result.target === 'new') {
                     // It's a wizard — navigate to the form screen for the wizard model
                     router.push({
                         pathname: '/record-form',
                         params: {
-                            model: wizardModel,
-                            title: wizardTitle,
-                            ...(wizardId ? { record_id: String(wizardId) } : {}),
-                            wizard_context: JSON.stringify(result.context || {}),
+                            model: actionModel,
+                            title: actionTitle,
+                            ...(actionId ? { record_id: String(actionId) } : {}),
+                            wizard_context: JSON.stringify(actionContext),
                         }
                     });
-                } else {
-                    // It's a regular action — navigate to the records list for that model
+                }
+                else {
+                    // It's a list action — navigate to the records list for that model
+                    // Pass domain if available so only related records are shown
                     router.push({
                         pathname: '/records',
-                        params: { model: wizardModel, title: wizardTitle }
+                        params: {
+                            model: actionModel,
+                            title: actionTitle,
+                            ...(result.domain ? { action_domain: JSON.stringify(result.domain) } : {}),
+                        }
                     });
+                }
+            } else if (result && typeof result === 'object' && result.type === 'ir.actions.report') {
+                // It's a report download action
+                try {
+                    const reportName = result.report_name;
+                    const reportType = result.report_type || 'qweb-pdf';
+                    
+                    // Odoo report routes are typically /report/pdf/report_name/id
+                    const ext = reportType === 'qweb-html' ? 'html' : 'pdf';
+                    const routeType = reportType === 'qweb-html' ? 'html' : 'pdf';
+                    // We must pass the report context or data if provided, but URL access is simplest
+                    const url = `${serverUrl}/report/${routeType}/${reportName}/${targetId}`;
+                    
+                    // @ts-ignore
+                    const fileUri = `${FileSystem.documentDirectory || 'file:///tmp/'}${reportName.replace(/\./g, '_')}_${targetId}.${ext}`;
+
+                    Alert.alert('Downloading', 'Please wait while the report downloads...');
+
+                    const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
+                        headers: {
+                            'Cookie': `session_id=${sessionId}`,
+                            'ngrok-skip-browser-warning': 'true',
+                        }
+                    });
+
+                    if (downloadRes.status !== 200) {
+                        throw new Error(`Server returned ${downloadRes.status} when downloading the report.`);
+                    }
+
+                    if (await Sharing.isAvailableAsync()) {
+                        await Sharing.shareAsync(downloadRes.uri, {
+                            mimeType: reportType === 'qweb-html' ? 'text/html' : 'application/pdf',
+                            dialogTitle: `View ${reportName}`,
+                        });
+                    } else {
+                        Alert.alert('Saved', `Report saved to: ${downloadRes.uri}`);
+                    }
+                } catch (reportErr: any) {
+                    console.error('Error downloading report:', reportErr);
+                    Alert.alert('Download Failed', reportErr.message);
                 }
             } else {
                 // No action returned, just refresh
@@ -242,7 +429,7 @@ export default function RecordForm() {
     };
 
     // ── Field Renderer ──
-    const renderField = (key: string, field: FieldSchema) => {
+    const renderField = (key: string, field: FieldSchema, node?: LayoutNode) => {
         if (field.type === 'binary') {
             const value = values[key];
             const isReadonly = field.readonly || key === 'id';
@@ -266,6 +453,15 @@ export default function RecordForm() {
         // ── One2many / Many2many — render as embedded list ──
         if (field.type === 'one2many' || field.type === 'many2many') {
             const relatedIds: any[] = values[key] || [];
+            
+            // Check if there is an embedded tree view in this field's layout node
+            let treeNode = node?.children?.find(c => c.type === 'tree');
+            let inlineButtons: LayoutNode[] = [];
+            
+            if (treeNode && treeNode.children) {
+                inlineButtons = treeNode.children.filter(c => c.type === 'button');
+            }
+
             return (
                 <View key={key} style={styles.formGroup}>
                     <Text style={[styles.label, field.required && styles.labelRequired]}>
@@ -280,34 +476,68 @@ export default function RecordForm() {
                                 const itemId = Array.isArray(item) ? item[0] : item;
                                 const itemName = Array.isArray(item) ? item[1] : `Record #${item}`;
                                 return (
-                                    <TouchableOpacity
+                                    <View
                                         key={`${key}-${idx}`}
                                         style={{
                                             paddingVertical: 10,
                                             borderBottomWidth: idx < relatedIds.length - 1 ? 1 : 0,
                                             borderBottomColor: COLORS.border + '40',
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                        }}
-                                        onPress={() => {
-                                            if (field.relation) {
-                                                router.push({
-                                                    pathname: '/record-form',
-                                                    params: {
-                                                        model: field.relation,
-                                                        record_id: String(itemId),
-                                                        title: String(itemName),
-                                                    }
-                                                });
-                                            }
                                         }}
                                     >
-                                        <Text style={{ color: COLORS.text, fontSize: 14, flex: 1 }} numberOfLines={1}>
-                                            {String(itemName)}
-                                        </Text>
-                                        <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
-                                    </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                            }}
+                                            onPress={() => {
+                                                if (field.relation) {
+                                                    router.push({
+                                                        pathname: '/record-form',
+                                                        params: {
+                                                            model: field.relation,
+                                                            record_id: String(itemId),
+                                                            title: String(itemName),
+                                                        }
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            <Text style={{ color: COLORS.text, fontSize: 14, flex: 1, fontWeight: '500' }} numberOfLines={2}>
+                                                {String(itemName)}
+                                            </Text>
+                                            <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
+                                        </TouchableOpacity>
+                                        
+                                        {/* Inline tree buttons (e.g., Duplicate, Delete) */}
+                                        {inlineButtons.length > 0 && (
+                                            <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                                                {inlineButtons.map((btn, bIdx) => (
+                                                    <TouchableOpacity
+                                                        key={`ibtn-${bIdx}`}
+                                                        style={[
+                                                            styles.actionButton, 
+                                                            { paddingVertical: 6, paddingHorizontal: 12, minWidth: 0, flex: 0 },
+                                                            btn.btn_class?.includes('btn-danger') && { backgroundColor: '#ffebee', borderWidth: 1, borderColor: '#f44336' },
+                                                        ]}
+                                                        onPress={() => {
+                                                            // For x2many inline buttons, the action runs on the specific row's record
+                                                            // We pass the tree element's ID and its related model
+                                                            handleButtonAction(btn.name || '', btn.btn_type || 'object', Number(itemId), field.relation);
+                                                        }}
+                                                    >
+                                                        <Text style={[
+                                                            styles.actionButtonText, 
+                                                            { fontSize: 12 },
+                                                            btn.btn_class?.includes('btn-danger') && { color: '#d32f2f' }
+                                                        ]}>
+                                                            {btn.string || btn.name}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+                                    </View>
                                 );
                             })
                         )}
@@ -435,12 +665,23 @@ export default function RecordForm() {
     const renderNode = (node: LayoutNode, index: number): React.ReactNode => {
         if (!node) return null;
 
+        // Check dynamic visibility — if invisible evaluates to true, skip
+        if (node.invisible && evaluateInvisible(node.invisible, values)) {
+            return null;
+        }
+
         switch (node.type) {
             case 'header': {
+                // Filter children by visibility
+                const visibleChildren = (node.children || []).filter(
+                    child => !child.invisible || !evaluateInvisible(child.invisible, values)
+                );
+                if (visibleChildren.length === 0) return null;
+
                 return (
                     <View key={`header-${index}`} style={styles.statusBar}>
                         <View style={styles.statusBarButtons}>
-                            {node.children?.map((child, i) => {
+                            {visibleChildren.map((child, i) => {
                                 if (child.type === 'button') {
                                     const isPrimary = child.btn_class?.includes('btn-primary') || child.btn_class?.includes('oe_highlight');
                                     return (
@@ -458,6 +699,66 @@ export default function RecordForm() {
                                 if (child.type === 'status_field' && child.name) {
                                     const fieldSchema = schema[child.name];
                                     const val = values[child.name];
+                                    
+                                    // If we have an explicit statusbar_visible list (from backend)
+                                    if (child.statusbar_visible && fieldSchema?.selection) {
+                                        const visibleKeys = child.statusbar_visible.split(',').map((s: string) => s.trim());
+                                        
+                                        // Ensure the current value is in the sequence, even if not explicitly listed in visibleKeys
+                                        let sequenceKeys = [...visibleKeys];
+                                        if (val && !sequenceKeys.includes(val)) {
+                                            sequenceKeys.push(val);
+                                        }
+
+                                        // Try to order by the selection options order if possible
+                                        const selectionKeys = fieldSchema.selection.map(([k]) => k);
+                                        sequenceKeys.sort((a, b) => {
+                                            const idxA = selectionKeys.indexOf(a);
+                                            const idxB = selectionKeys.indexOf(b);
+                                            if (idxA === -1 && idxB === -1) return 0;
+                                            if (idxA === -1) return 1;
+                                            if (idxB === -1) return -1;
+                                            return idxA - idxB;
+                                        });
+
+                                        const activeIndex = sequenceKeys.indexOf(val);
+
+                                        return (
+                                            <ScrollView 
+                                                key={`status-${i}`} 
+                                                horizontal 
+                                                showsHorizontalScrollIndicator={false}
+                                                style={{flexDirection: 'row', marginLeft: 8}}
+                                                contentContainerStyle={{alignItems: 'center'}}
+                                            >
+                                                {sequenceKeys.map((stepKey, stepIdx) => {
+                                                    const match = fieldSchema.selection!.find(([k]) => k === stepKey);
+                                                    const stepLabel = match ? match[1] : stepKey;
+                                                    const isActive = stepIdx <= activeIndex;
+                                                    const isCurrent = stepIdx === activeIndex;
+                                                    
+                                                    return (
+                                                        <View key={stepKey} style={{flexDirection: 'row', alignItems: 'center'}}>
+                                                            <View style={[
+                                                                styles.statusBadge, 
+                                                                isActive ? {backgroundColor: COLORS.primary} : {backgroundColor: COLORS.border, opacity: 0.5},
+                                                                isCurrent ? {borderWidth: 2, borderColor: '#a0c4ff'} : {}
+                                                            ]}>
+                                                                <Text style={[styles.statusBadgeText, isActive ? {color: '#fff'} : {color: '#333'}]}>
+                                                                    {stepLabel}
+                                                                </Text>
+                                                            </View>
+                                                            {stepIdx < sequenceKeys.length - 1 && (
+                                                                <Ionicons name="chevron-forward" size={16} color={COLORS.border} style={{marginHorizontal: 4}} />
+                                                            )}
+                                                        </View>
+                                                    );
+                                                })}
+                                            </ScrollView>
+                                        );
+                                    }
+
+                                    // Fallback to single badge
                                     let displayVal = '';
                                     if (fieldSchema?.type === 'selection' && fieldSchema.selection) {
                                         const match = fieldSchema.selection.find(([k]) => k === val);
@@ -489,21 +790,27 @@ export default function RecordForm() {
 
             case 'notebook': {
                 const notebookKey = `nb-${index}`;
+                // Filter pages by visibility
+                const visiblePages = (node.pages || []).filter(
+                    page => !page.invisible || !evaluateInvisible(page.invisible, values)
+                );
+                if (visiblePages.length === 0) return null;
+
                 const currentTabIndex = activeTab[notebookKey] || 0;
-                const pages = node.pages || [];
-                const activePage = pages[currentTabIndex];
+                const safeTabIndex = currentTabIndex < visiblePages.length ? currentTabIndex : 0;
+                const activePage = visiblePages[safeTabIndex];
 
                 return (
                     <View key={notebookKey} style={styles.notebook}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             <View style={styles.tabBar}>
-                                {pages.map((page, i) => (
+                                {visiblePages.map((page, i) => (
                                     <TouchableOpacity
                                         key={`tab-${i}`}
-                                        style={[styles.tab, currentTabIndex === i && styles.tabActive]}
+                                        style={[styles.tab, safeTabIndex === i && styles.tabActive]}
                                         onPress={() => setActiveTab(prev => ({ ...prev, [notebookKey]: i }))}
                                     >
-                                        <Text style={[styles.tabText, currentTabIndex === i && styles.tabTextActive]}>
+                                        <Text style={[styles.tabText, safeTabIndex === i && styles.tabTextActive]}>
                                             {page.string || `Tab ${i + 1}`}
                                         </Text>
                                     </TouchableOpacity>
@@ -529,6 +836,25 @@ export default function RecordForm() {
             }
 
             case 'button': {
+                // Stat buttons show count + label (e.g. "5 Samples")
+                if (node.is_stat_button && node.stat_field) {
+                    const statValue = values[node.stat_field];
+                    return (
+                        <TouchableOpacity
+                            key={`btn-${index}`}
+                            style={[styles.inlineButton, { flexDirection: 'column', alignItems: 'center', minWidth: 80, paddingVertical: 12 }]}
+                            onPress={() => handleButtonAction(node.name || '', node.btn_type || 'object')}
+                        >
+                            <Text style={[styles.inlineButtonText, { fontSize: 20, fontWeight: 'bold' }]}>
+                                {statValue !== undefined && statValue !== null && statValue !== false ? String(statValue) : '0'}
+                            </Text>
+                            <Text style={[styles.inlineButtonText, { fontSize: 12, marginTop: 2 }]}>
+                                {node.string || node.name}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                }
+
                 return (
                     <TouchableOpacity
                         key={`btn-${index}`}
@@ -543,7 +869,7 @@ export default function RecordForm() {
             case 'field': {
                 const fieldSchema = schema[node.name || ''];
                 if (!fieldSchema) return null;
-                return renderField(node.name || '', fieldSchema);
+                return renderField(node.name || '', fieldSchema, node);
             }
 
             case 'container': {

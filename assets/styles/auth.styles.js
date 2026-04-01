@@ -107,4 +107,77 @@ export const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
   },
+
+  // 🗄️ Database picker styles
+  dbPickerButton: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dbPickerText: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  dbPickerPlaceholder: {
+    color: "#9A8478",
+  },
+  dbLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  dbLoadingText: {
+    fontSize: 14,
+    color: COLORS.textLight,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+    maxHeight: "60%",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  modalOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  modalOptionSelected: {
+    backgroundColor: COLORS.primary + "14",
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  modalOptionTextSelected: {
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
 });

@@ -139,6 +139,7 @@ export default function Index() {
       await SecureStore.deleteItemAsync('server_url');
       await SecureStore.deleteItemAsync('uid');
       await SecureStore.deleteItemAsync('session_id');
+      await SecureStore.deleteItemAsync('database');
       router.replace('/sign-in');
     } catch (error) {
       console.error('Sign-out error:', error);
