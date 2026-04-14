@@ -138,11 +138,11 @@ export default function Submenu() {
                 </View>
                 <View style={styles.menuTextContainer}>
                     <Text style={styles.menuName}>{item.name}</Text>
-                    {item.model ? (
+                    {/* {item.model ? (
                         <Text style={styles.menuModel}>{item.model}</Text>
                     ) : (
                         item.has_children ? <Text style={styles.menuModel}>{item.children?.length || 0} items</Text> : null
-                    )}
+                    )} */}
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
             </TouchableOpacity>
