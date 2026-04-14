@@ -347,14 +347,15 @@ export const styles = StyleSheet.create({
         borderRadius: 6,
     },
     listFieldLabel: {
-        fontSize: 11,
+        fontSize: 12,
         color: COLORS.textLight,
         marginRight: 4,
+        // fontWeight: '900',
     },
     listFieldValue: {
         fontSize: 11,
         color: COLORS.text,
-        fontWeight: '500',
+        fontWeight: '900',
         maxWidth: 100,
     },
 

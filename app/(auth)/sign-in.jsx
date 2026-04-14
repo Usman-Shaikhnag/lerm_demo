@@ -32,28 +32,41 @@ const SignIn = () => {
   const [dbModalVisible, setDbModalVisible] = useState(false);
 
   const fetchDatabases = async (url) => {
-    const trimmedUrl = (url || serverUrl).trim();
+    let trimmedUrl = (url || serverUrl).trim();
     if (!trimmedUrl) return;
+
+    if (!/^https?:\/\//i.test(trimmedUrl)) {
+      trimmedUrl = `http://${trimmedUrl}`;
+    }
+    trimmedUrl = trimmedUrl.replace(/\/+$/, "");
 
     setFetchingDbs(true);
     setDatabases([]);
     setSelectedDb("");
     setDbFetched(false);
 
+    const fullUrl = `${trimmedUrl}/web/database/list`;
+    console.log("Fetching DBs from:", fullUrl);
     try {
-      const response = await fetch(`${trimmedUrl}/mobile/db_list`, {
+      const response = await fetch(fullUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({ jsonrpc: "2.0", params: {} }),
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'no text');
+        console.warn("fetchDatabases error details:", fullUrl, response.status, errorText);
+        throw new Error(`HTTP ${response.status}`);
+      }
 
       const data = await response.json();
-      const dbList = data.result?.databases || [];
+      // Odoo's built-in endpoint returns an array directly in data.result
+      const dbList = Array.isArray(data.result) ? data.result : (data.result?.databases || []);
 
       setDatabases(dbList);
       setDbFetched(true);
@@ -76,22 +89,31 @@ const SignIn = () => {
       return;
     }
 
+    let formattedUrl = serverUrl.trim();
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = `http://${formattedUrl}`;
+    }
+    formattedUrl = formattedUrl.replace(/\/+$/, "");
+
     if (databases.length > 1 && !selectedDb) {
       setError("Please select a database");
       return;
     }
 
     try {
+      // Use Odoo's built-in /web/session/authenticate (server-wide, works on all versions)
+      const dbToUse = selectedDb || (databases.length === 1 ? databases[0] : "");
       const request_body = {
-        email: emailAddress.trim(),
+        db: dbToUse,
+        login: emailAddress.trim(),
         password: password,
-        ...(selectedDb ? { db: selectedDb } : {}),
       };
 
-      const response = await fetch(`${serverUrl}/mobile_login`, {
+      const response = await fetch(`${formattedUrl}/web/session/authenticate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
@@ -105,24 +127,45 @@ const SignIn = () => {
       }
 
       const data = await response.json();
-      console.log("Login Response:", data);
+      console.log("Login Response:", JSON.stringify(data));
 
-      if (data.result.success) {
-        console.log("Storing credentials:", { email: emailAddress, uid: data.result.uid });
+      // Check for JSON-RPC error (e.g. AccessDenied)
+      if (data.error) {
+        const errMsg = data.error.data?.message || data.error.message || "Invalid credentials";
+        setError(errMsg);
+        Alert.alert("Login Failed", errMsg);
+        return;
+      }
+
+      const result = data.result;
+      const uid = result.uid;
+      // Extract session_id from Set-Cookie header (Odoo 17+) or from JSON body (older Odoo)
+      let sessionId = result.session_id || "";
+      if (!sessionId) {
+        const setCookie = response.headers.get("set-cookie") || "";
+        const match = setCookie.match(/session_id=([^;]+)/);
+        if (match) {
+          sessionId = match[1];
+        }
+      }
+      console.log("Extracted session_id:", sessionId);
+
+      if (uid) {
+        console.log("Storing credentials:", { email: emailAddress, uid });
         await SecureStore.setItemAsync("email", emailAddress.trim());
         await SecureStore.setItemAsync("password", password);
-        await SecureStore.setItemAsync("server_url", serverUrl);
-        await SecureStore.setItemAsync("uid", String(data.result.uid));
-        await SecureStore.setItemAsync("session_id", String(data.result.session_id));
-        if (selectedDb) {
-          await SecureStore.setItemAsync("database", selectedDb);
+        await SecureStore.setItemAsync("server_url", formattedUrl);
+        await SecureStore.setItemAsync("uid", String(uid));
+        await SecureStore.setItemAsync("session_id", sessionId);
+        if (dbToUse) {
+          await SecureStore.setItemAsync("database", dbToUse);
         }
-        console.log("Setting session id", String(data.result.session_id));
+        console.log("Setting session id", sessionId);
         setError("");
         router.replace("/");
       } else {
-        setError(data.result.error || "Invalid credentials");
-        Alert.alert("Login Failed", data.result.error || "Invalid credentials");
+        setError("Invalid credentials");
+        Alert.alert("Login Failed", "Invalid credentials");
       }
     } catch (error) {
       console.error("Login Error:", error);

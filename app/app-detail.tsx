@@ -143,11 +143,17 @@ export default function AppDetail() {
             return;
         }
 
+        if (menu.model === 'board.board') {
+            Alert.alert('Unsupported', 'Odoo Dashboards are composed of custom XML views and do not contain queryable records. They are not currently supported in the standard mobile interface.');
+            return;
+        }
+
         router.push({
             pathname: '/records',
             params: {
                 model: menu.model,
                 title: menu.name,
+                ...(menu.action_id ? { action_id: menu.action_id.toString() } : {}),
             },
         });
     };

@@ -28,12 +28,13 @@ interface RecordData {
 
 export default function Records() {
     const router = useRouter();
-    const { model, title, action_domain } = useLocalSearchParams<{ model: string; title: string; action_domain?: string }>();
+    const { model, title, action_domain, action_id } = useLocalSearchParams<{ model: string; title: string; action_domain?: string; action_id?: string }>();
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [records, setRecords] = useState<RecordData[]>([]);
     const [fields, setFields] = useState<Record<string, FieldMeta>>({});
+    const [searchFields, setSearchFields] = useState<Record<string, FieldMeta>>({});
     const [totalCount, setTotalCount] = useState(0);
     const [offset, setOffset] = useState(0);
     const [search, setSearch] = useState('');
@@ -84,6 +85,7 @@ export default function Records() {
                         search_field: searchField,
                         group_by: groupBy,
                         ...(action_domain ? { action_domain: JSON.parse(action_domain) } : {}),
+                        ...(action_id ? { action_id: parseInt(action_id as string) } : {}),
                     },
                 }),
             });
@@ -95,9 +97,14 @@ export default function Records() {
                 if (reset) {
                     setRecords(newRecords);
                 } else {
-                    setRecords(prev => [...prev, ...newRecords]);
+                    setRecords(prev => {
+                        const existingIds = new Set(prev.map(r => r.id));
+                        const uniqueNew = newRecords.filter((r: RecordData) => !existingIds.has(r.id));
+                        return [...prev, ...uniqueNew];
+                    });
                 }
                 setFields(data.result.fields || {});
+                setSearchFields(data.result.search_fields || data.result.fields || {});
                 setTotalCount(data.result.total_count || 0);
                 setOffset(currentOffset + newRecords.length);
             } else {
@@ -119,14 +126,14 @@ export default function Records() {
 
     const groupedRecords = useMemo(() => {
         if (!groupBy) return [];
-        const groups: { title: string; data: RecordData[] }[] = [];
+        const groups: { title: string; data: RecordData[]; key: string; id: string }[] = [];
         records.forEach(r => {
             let val = r[groupBy];
             if (Array.isArray(val) && val.length === 2) val = val[1];
             const title = val !== undefined && val !== null && val !== false && val !== '' ? String(val) : 'None';
             let group = groups.find(g => g.title === title);
             if (!group) {
-                group = { title, data: [] };
+                group = { title, data: [], key: title, id: title };
                 groups.push(group);
             }
             group.data.push(r);
@@ -186,7 +193,7 @@ export default function Records() {
                 activeOpacity={0.6}
                 onPress={() => router.push({
                     pathname: '/record-form',
-                    params: { model, record_id: item.id.toString(), title: String(primaryValue) }
+                    params: { model, record_id: item.id.toString(), title: String(primaryValue), ...(action_id ? { action_id } : {}) }
                 })}
             >
                 <View style={styles.listRowMain}>
@@ -234,7 +241,7 @@ export default function Records() {
                 activeOpacity={0.7}
                 onPress={() => router.push({
                     pathname: '/record-form',
-                    params: { model, record_id: item.id.toString(), title: String(primaryValue) }
+                    params: { model, record_id: item.id.toString(), title: String(primaryValue), ...(action_id ? { action_id } : {}) }
                 })}
             >
                 <View style={styles.kanbanHeader}>
@@ -355,7 +362,7 @@ export default function Records() {
                     >
                         <Ionicons name="filter" size={16} color={COLORS.textLight} />
                         <Text style={styles.filterButtonText} numberOfLines={1}>
-                            Search: {searchField ? (fields[searchField]?.label || searchField) : 'All / Default'}
+                            Search: {searchField ? (searchFields[searchField]?.label || searchField) : 'All / Default'}
                         </Text>
                         <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
                     </TouchableOpacity>
@@ -369,7 +376,7 @@ export default function Records() {
                     >
                         <Ionicons name="layers-outline" size={16} color={COLORS.textLight} />
                         <Text style={styles.filterButtonText} numberOfLines={1}>
-                            Group: {groupBy ? (fields[groupBy]?.label || groupBy) : 'None'}
+                            Group: {groupBy ? (searchFields[groupBy]?.label || groupBy) : 'None'}
                         </Text>
                         <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
                     </TouchableOpacity>
@@ -399,8 +406,8 @@ export default function Records() {
                         </View>
                         <FlatList
                             data={modalType === 'search'
-                                ? [{ key: '', label: 'All / Default' }, ...Object.entries(fields).map(([k, v]) => ({ key: k, label: v.label }))]
-                                : [{ key: '', label: 'None' }, ...Object.entries(fields).filter(([k, v]) => ['many2one', 'selection', 'char', 'boolean'].includes(v.type) || k.includes('state')).map(([k, v]) => ({ key: k, label: v.label }))]
+                                ? [{ key: '', label: 'All / Default' }, ...Object.entries(searchFields).map(([k, v]) => ({ key: k, label: v.label })).sort((a, b) => a.label.localeCompare(b.label))]
+                                : [{ key: '', label: 'None' }, ...Object.entries(searchFields).filter(([k, v]) => ['many2one', 'selection', 'char', 'boolean'].includes(v.type) || k.includes('state')).map(([k, v]) => ({ key: k, label: v.label })).sort((a, b) => a.label.localeCompare(b.label))]
                             }
                             keyExtractor={(item) => item.key}
                             renderItem={({ item }) => {
@@ -557,7 +564,7 @@ export default function Records() {
                 activeOpacity={0.8}
                 onPress={() => router.push({
                     pathname: '/record-form',
-                    params: { model, title: `New ${title || model}` }
+                    params: { model, title: `New ${title || model}`, ...(action_id ? { action_id } : {}) }
                 })}
             >
                 <Ionicons name="add" size={28} color={COLORS.white} />

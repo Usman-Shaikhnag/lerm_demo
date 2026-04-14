@@ -43,6 +43,7 @@ function getAvatarColor(name: string): string {
 function getAppIcon(app: OdooApp): string {
   const name = app.name.toLowerCase();
   const cat = app.category.toLowerCase();
+  if (name.includes('lerm civil')) return 'custom-lerm-civil';
   if (name.includes('sale') || cat.includes('sales')) return 'cart-outline';
   if (name.includes('purchase') || cat.includes('purchase')) return 'bag-outline';
   if (name.includes('account') || name.includes('invoic') || cat.includes('accounting')) return 'calculator-outline';
@@ -107,7 +108,11 @@ export default function Index() {
       const data = await response.json();
 
       if (data.result?.success) {
-        setApps(data.result.apps || []);
+        const fetchedApps = data.result.apps || [];
+        const visibleApps = fetchedApps.filter(
+          (app: OdooApp) => app.display_name.trim().toLowerCase() !== 'settings'
+        );
+        setApps(visibleApps);
         setUserName(data.result.user_name || '');
       } else {
         // Session might be expired
@@ -174,8 +179,15 @@ export default function Index() {
           }
         }}
       >
-        <View style={[styles.appIconContainer, { backgroundColor: avatarColor + '18' }]}>
-          <Ionicons name={iconName as any} size={28} color={avatarColor} />
+        <View style={iconName === 'custom-lerm-civil' ? styles.appIconContainer : [styles.appIconContainer, { backgroundColor: avatarColor + '18' }]}>
+          {iconName === 'custom-lerm-civil' ? (
+            <Image
+              source={require('../assets/images/lerm_app.png')}
+              style={{ width: 52, height: 52, resizeMode: 'contain', borderRadius: 14 }}
+            />
+          ) : (
+            <Ionicons name={iconName as any} size={28} color={avatarColor} />
+          )}
         </View>
         <Text style={styles.appName} numberOfLines={2}>
           {item.display_name}

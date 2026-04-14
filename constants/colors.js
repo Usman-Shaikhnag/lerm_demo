@@ -52,11 +52,11 @@ const oceanTheme = {
 
 const blueTheme = {
   primary: "#0078c8",
-  background: "#F0F8FF",
+  background: "#aac0d4ff",
   text: "#003366",
   border: "#B3D4F0",
   white: "#FFFFFF",
-  textLight: "#66A3D2",
+  textLight: "#000",
   expense: "#EF5350",
   income: "#26A69A",
   card: "#FFFFFF",

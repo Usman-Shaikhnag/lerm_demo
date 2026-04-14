@@ -117,6 +117,7 @@ export default function Submenu() {
             params: {
                 model: menu.model,
                 title: menu.name,
+                ...(menu.action_id ? { action_id: menu.action_id.toString() } : {}),
             },
         });
     };
