@@ -1,4 +1,4 @@
-package com.anonymous.lerm_mobile
+package com.esehatmeditechltd.lerm
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

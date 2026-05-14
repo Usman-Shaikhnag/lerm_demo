@@ -40,7 +40,7 @@ export default function Records() {
     const [search, setSearch] = useState('');
     const [searchField, setSearchField] = useState('');
     const [groupBy, setGroupBy] = useState('');
-    const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+    const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
     const [error, setError] = useState(false);
 
     // Modal state for Search/Group dropdowns

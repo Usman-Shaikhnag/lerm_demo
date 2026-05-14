@@ -1,4 +1,4 @@
-package com.anonymous.lerm_mobile
+package com.esehatmeditechltd.lerm
 
 import android.app.Application
 import android.content.res.Configuration

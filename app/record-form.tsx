@@ -4,9 +4,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Platform,
     StyleSheet,
     Text,
@@ -14,7 +16,9 @@ import {
     View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-// import SRFForm from './srf';
+import SRFForm from './srf';
+import SampleForm from './sample';
+import ELNForm from './eln';
 
 export default function RecordForm() {
     const router = useRouter();
@@ -28,10 +32,17 @@ export default function RecordForm() {
     const [webviewLoading, setWebviewLoading] = useState(true);
     const webviewRef = useRef<WebView>(null);
 
-    // if (model === 'lerm.civil.srf') {
+    if (model === 'lerm.civil.srf') {
+        return <SRFForm />;
+    }
+    
+    if (model === 'lerm.srf.sample') {
+        return <SampleForm />;
+    }
 
-    //     return <SRFForm />;
-    // }
+    if (model === 'lerm.eln') {
+        return <ELNForm />;
+    }
 
     useEffect(() => {
         const init = async () => {
@@ -75,20 +86,76 @@ export default function RecordForm() {
             const sUrl = await SecureStore.getItemAsync('server_url');
             if (!sid || !sUrl) return;
 
-            const filename = url.split('/').pop() || 'report.pdf';
+            // Ensure absolute URL
+            const fullUrl = url.startsWith('http') ? url : `${sUrl}${url}`;
+
+            // Extract a reasonable filename
+            const urlPath = fullUrl.split('?')[0];
+            let filename = urlPath.split('/').pop() || 'report.pdf';
+            if (!filename.includes('.')) {
+                filename += '.pdf';
+            }
             const localUri = FileSystem.documentDirectory + filename;
 
-            const downloadResult = await FileSystem.downloadAsync(url, localUri);
+            console.log('Downloading report from:', fullUrl);
+
+            const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri, {
+                headers: {
+                    'Cookie': `session_id=${sid}`,
+                },
+            });
 
             if (downloadResult.status === 200) {
-                if (await Sharing.isAvailableAsync()) {
-                    await Sharing.shareAsync(downloadResult.uri, {
-                        dialogTitle: 'Save or Share Report',
-                        mimeType: 'application/pdf',
-                    });
-                } else {
-                    alert('Download Complete - Report saved');
-                }
+                Alert.alert(
+                    'Download Complete',
+                    'Report has been downloaded successfully. What would you like to do?',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Share',
+                            onPress: async () => {
+                                if (await Sharing.isAvailableAsync()) {
+                                    await Sharing.shareAsync(downloadResult.uri, {
+                                        mimeType: 'application/pdf',
+                                        dialogTitle: 'Share PDF Report'
+                                    });
+                                } else {
+                                    Alert.alert('Error', 'Sharing is not available on this device.');
+                                }
+                            }
+                        },
+                        {
+                            text: 'View',
+                            onPress: async () => {
+                                if (Platform.OS === 'android') {
+                                    try {
+                                        const contentUri = await FileSystem.getContentUriAsync(downloadResult.uri);
+                                        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                                            data: contentUri,
+                                            flags: 1,
+                                            type: 'application/pdf',
+                                        });
+                                    } catch (e) {
+                                        console.error('IntentLauncher error:', e);
+                                        Alert.alert('Error', 'No app found to open PDFs. Try sharing instead.');
+                                    }
+                                } else {
+                                    if (await Sharing.isAvailableAsync()) {
+                                        await Sharing.shareAsync(downloadResult.uri, {
+                                            UTI: 'com.adobe.pdf',
+                                            mimeType: 'application/pdf',
+                                        });
+                                    } else {
+                                        Alert.alert('Download Complete', 'Report saved.');
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                );
+            } else {
+                console.error('Download failed with status:', downloadResult.status);
+                alert('Error: Download failed (status ' + downloadResult.status + ')');
             }
         } catch (err) {
             console.error('Download error:', err);
@@ -102,82 +169,107 @@ export default function RecordForm() {
             const sUrl = await SecureStore.getItemAsync('server_url');
             if (!sid || !sUrl) return;
 
-            const resolveResponse = await fetch(`${sUrl}/mobile/resolve_report`, {
+            setWebviewLoading(true); // Show loading bar while generating
+
+            const downloadResponse = await fetch(`${sUrl}/mobile/download_report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Cookie': `session_id=${sid}`,
                 },
                 body: JSON.stringify({
-                    model: model,
-                    id: recordId,
-                    method: methodName,
+                    params: {
+                        model: model,
+                        id: recordId,
+                        method: methodName,
+                    }
                 }),
             });
 
-            const resolveResult = await resolveResponse.json();
+            const rawResult = await downloadResponse.json();
+            const downloadResult = rawResult.result || rawResult;
 
-            if (!resolveResult.success) {
-                alert('Error: ' + (resolveResult.error || 'Failed to resolve report method'));
+            setWebviewLoading(false);
+
+            console.log("Download result check:", downloadResult.success ? "Success" : "Failed", downloadResult.error);
+
+            if (!downloadResult.success) {
+                alert('Error: ' + (downloadResult.error || 'Failed to generate report'));
                 return;
             }
 
-            // If we got PDF directly in the response (qweb-html converted to PDF)
-            if (resolveResult.pdf_base64) {
-                const localUri = FileSystem.documentDirectory + resolveResult.filename;
-                await FileSystem.writeAsStringAsync(localUri, resolveResult.pdf_base64, {
+            if (downloadResult.pdf_base64) {
+                const defaultFileName = downloadResult.filename || 'report.pdf';
+                const baseDir = FileSystem.documentDirectory + 'LERM/';
+                
+                // Ensure LERM directory exists in document directory
+                const dirInfo = await FileSystem.getInfoAsync(baseDir);
+                if (!dirInfo.exists) {
+                    await FileSystem.makeDirectoryAsync(baseDir, { intermediates: true });
+                }
+
+                const localUri = baseDir + defaultFileName;
+                
+                await FileSystem.writeAsStringAsync(localUri, downloadResult.pdf_base64, {
                     encoding: FileSystem.EncodingType.Base64,
                 });
-                if (await Sharing.isAvailableAsync()) {
-                    await Sharing.shareAsync(localUri, {
-                        dialogTitle: 'Save or Share Report',
-                        mimeType: 'application/pdf',
-                    });
-                }
-                return;
-            }
 
-            // If we got report info, now render the PDF
-            if (resolveResult.report_name) {
-                const renderResponse = await fetch(`${sUrl}/mobile/render_pdf`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Cookie': `session_id=${sid}`,
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        model_name: model,
-                        id: recordId,
-                        report_name: resolveResult.report_name,
-                        data: resolveResult.report_data,
-                    }),
-                });
-
-                const renderResult = await renderResponse.json();
-
-                if (renderResult.success && renderResult.pdf_base64) {
-                    const localUri = FileSystem.documentDirectory + renderResult.filename;
-                    await FileSystem.writeAsStringAsync(localUri, renderResult.pdf_base64, {
-                        encoding: FileSystem.EncodingType.Base64,
-                    });
-                    if (await Sharing.isAvailableAsync()) {
-                        await Sharing.shareAsync(localUri, {
-                            dialogTitle: 'Save or Share Report',
-                            mimeType: 'application/pdf',
-                        });
-                    }
-                } else {
-                    alert('Error: ' + (renderResult.error || 'Failed to generate report'));
-                }
+                Alert.alert(
+                    'Download Complete',
+                    'Report has been downloaded successfully. What would you like to do?',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Share',
+                            onPress: async () => {
+                                if (await Sharing.isAvailableAsync()) {
+                                    await Sharing.shareAsync(localUri, {
+                                        mimeType: 'application/pdf',
+                                        dialogTitle: 'Share PDF Report'
+                                    });
+                                } else {
+                                    Alert.alert('Error', 'Sharing is not available on this device.');
+                                }
+                            }
+                        },
+                        {
+                            text: 'View',
+                            onPress: async () => {
+                                if (Platform.OS === 'android') {
+                                    try {
+                                        const cUri = await FileSystem.getContentUriAsync(localUri);
+                                        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                                            data: cUri,
+                                            flags: 1,
+                                            type: 'application/pdf',
+                                        });
+                                    } catch (e) {
+                                        console.error('IntentLauncher error:', e);
+                                        Alert.alert('Error', 'No app found to open PDFs. Try sharing instead.');
+                                    }
+                                } else {
+                                    if (await Sharing.isAvailableAsync()) {
+                                        await Sharing.shareAsync(localUri, {
+                                            UTI: 'com.adobe.pdf',
+                                            mimeType: 'application/pdf',
+                                        });
+                                    } else {
+                                        Alert.alert('Download Complete', 'Report saved.');
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                );
+            } else {
+                alert('Error: No PDF content returned');
             }
         } catch (err) {
+            setWebviewLoading(false);
             console.error('Print error:', err);
             alert('Error: Failed to generate report');
         }
-    };
-
-    // JavaScript to inject into the WebView to improve mobile experience
+    };    // JavaScript to inject into the WebView to improve mobile experience
     const injectedJS = `
         (function() {
             // Add meta viewport for proper scaling
@@ -232,23 +324,60 @@ export default function RecordForm() {
             \`;
             document.head.appendChild(style);
 
-            // Intercept button clicks for report printing
+            // Intercept print/report button clicks in the form header
+            // We use capture phase to get it before Odoo's own click handlers
             document.addEventListener('click', function(e) {
-                var btn = e.target.closest('.o_statusbar_buttons .btn, .o_button_btn');
-                if (btn) {
-                    var btnName = btn.getAttribute('name') || btn.innerText.trim();
-                    if (btnName && (btnName.includes('print') || btnName.includes('datasheet') || btnName.includes('report') || btnName.includes('nabl'))) {
-                        var model = odoo.context?.active_model || '';
-                        var activeId = odoo.context?.active_id || odoo?.csrft_token || '';
-                        window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'print_button',
-                            method: btnName,
-                            model: model,
-                            id: activeId
-                        }));
-                    }
+                var btn = e.target.closest('.o_statusbar_buttons button[name], button.oe_stat_button[name]');
+                if (!btn) return;
+
+                var btnName = btn.getAttribute('name') || '';
+                // Only intercept report-related buttons
+                var reportButtons = ['print_nabl_report', 'print_non_nabl_report', 'print_datasheet'];
+                if (reportButtons.indexOf(btnName) === -1) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+
+        // Get the current record model and ID from React Native
+                var activeModel = '${model}';
+                var activeId = '${record_id || ''}';
+                
+                // Fallback to URL parsing if somehow they are empty
+                try {
+                    var href = window.location.href || '';
+                    var modelMatch = href.match(/model=([^&#]+)/);
+                    var idMatch = href.match(/[&?#]id=([^&#]+)/);
+                    if (!activeModel && modelMatch) activeModel = decodeURIComponent(modelMatch[1]);
+                    if (!activeId && idMatch) activeId = idMatch[1];
+                } catch(ex) {}
+
+                if (!activeModel || !activeId) {
+                    alert('Could not determine record context. Please save the record first.');
+                    return;
                 }
-            });
+
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'print_report',
+                    method: btnName,
+                    model: activeModel,
+                    id: activeId
+                }));
+            }, true);
+
+            // Also intercept form submissions to /report/download as fallback
+            var origSubmit = HTMLFormElement.prototype.submit;
+            HTMLFormElement.prototype.submit = function() {
+                var action = this.action || '';
+                if (action.indexOf('/report/download') !== -1 || action.indexOf('/report/pdf') !== -1) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'report_download',
+                        url: action
+                    }));
+                    return;
+                }
+                return origSubmit.call(this);
+            };
         })();
         true;
     `;
@@ -321,7 +450,11 @@ export default function RecordForm() {
                 onMessage={(event) => {
                     try {
                         const data = JSON.parse(event.nativeEvent.data);
-                        if (data.type === 'print_button') {
+                        console.log('WebView message:', data.type, data.url || data.method);
+                        if (data.type === 'report_download') {
+                            // Intercepted from form.submit() or <a> click for /report/download
+                            handleReportDownload(data.url);
+                        } else if (data.type === 'print_report' || data.type === 'print_button') {
                             const methodMap: Record<string, string> = {
                                 'print_datasheet': 'print_datasheet',
                                 'print_nabl_report': 'print_nabl_report',
@@ -348,10 +481,17 @@ export default function RecordForm() {
                 }}
                 onShouldStartLoadWithRequest={(request) => {
                     const url = request.url;
-                    // Intercept report download URLs
-                    if (url.includes('/report/') || url.includes('download=true')) {
+                    // Intercept Odoo report/download URLs and handle as file downloads
+                    if (
+                        url.includes('/report/pdf/') ||
+                        url.includes('/report/download/') ||
+                        url.includes('/report/html/') ||
+                        url.includes('download=true') ||
+                        url.match(/\.(pdf|xlsx|xls|csv|zip)(\?|$)/)
+                    ) {
+                        console.log('Intercepted report URL:', url);
                         handleReportDownload(url);
-                        return false;
+                        return false; // Prevent WebView from navigating
                     }
                     return true;
                 }}

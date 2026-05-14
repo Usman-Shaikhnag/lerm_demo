@@ -1,5 +1,6 @@
 import { COLORS } from '@/constants/colors'
 import { Ionicons } from '@expo/vector-icons'
+import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import * as SecureStore from 'expo-secure-store'
 import { useState } from 'react'
@@ -30,6 +31,18 @@ const SignIn = () => {
   const [fetchingDbs, setFetchingDbs] = useState(false);
   const [dbFetched, setDbFetched] = useState(false);
   const [dbModalVisible, setDbModalVisible] = useState(false);
+
+  const getLocalIp = () => {
+    try {
+      const hostUri = Constants?.expoConfig?.hostUri;
+      if (hostUri) {
+        return hostUri.split(':')[0];
+      }
+    } catch (e) {
+      console.warn('Could not get hostUri from Constants');
+    }
+    return '10.0.2.2'; // Fallback
+  };
 
   const fetchDatabases = async (url) => {
     let trimmedUrl = (url || serverUrl).trim();
@@ -174,8 +187,6 @@ const SignIn = () => {
     }
   };
 
-  const showMultipleDbs = databases.length > 1;
-
   return (
     <KeyboardAwareScrollView
       style={{ flex: 1 }}
@@ -206,7 +217,14 @@ const SignIn = () => {
           placeholder="Enter Server URL"
           placeholderTextColor="#9A8478"
           onChangeText={(text) => {
-            setServerUrl(text.trim());
+            let newVal = text.trim();
+            if (newVal.toLowerCase().includes('localhost')) {
+              const ip = getLocalIp();
+              if (ip) {
+                newVal = newVal.replace(/localhost/gi, ip);
+              }
+            }
+            setServerUrl(newVal);
             // Reset DB state when URL changes
             setDatabases([]);
             setSelectedDb("");
@@ -224,70 +242,68 @@ const SignIn = () => {
           </View>
         ) : null}
 
-        {/* Database picker — only shown when multiple databases exist */}
-        {showMultipleDbs ? (
-          <>
-            <TouchableOpacity
-              style={styles.dbPickerButton}
-              onPress={() => setDbModalVisible(true)}
+        {/* Database picker */}
+        <>
+          <TouchableOpacity
+            style={styles.dbPickerButton}
+            onPress={() => setDbModalVisible(true)}
+          >
+            <Ionicons name="server-outline" size={20} color={COLORS.primary} />
+            <Text
+              style={[
+                styles.dbPickerText,
+                !selectedDb && styles.dbPickerPlaceholder,
+              ]}
             >
-              <Ionicons name="server-outline" size={20} color={COLORS.primary} />
-              <Text
-                style={[
-                  styles.dbPickerText,
-                  !selectedDb && styles.dbPickerPlaceholder,
-                ]}
-              >
-                {selectedDb || "Select Database"}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
-            </TouchableOpacity>
+              {selectedDb || "Select Database"}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
 
-            {/* Database selection modal */}
-            <Modal
-              visible={dbModalVisible}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setDbModalVisible(false)}
+          {/* Database selection modal */}
+          <Modal
+            visible={dbModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDbModalVisible(false)}
+          >
+            <Pressable
+              style={styles.modalOverlay}
+              onPress={() => setDbModalVisible(false)}
             >
-              <Pressable
-                style={styles.modalOverlay}
-                onPress={() => setDbModalVisible(false)}
-              >
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Select Database</Text>
-                  {databases.map((db) => (
-                    <TouchableOpacity
-                      key={db}
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Database</Text>
+                {databases.map((db) => (
+                  <TouchableOpacity
+                    key={db}
+                    style={[
+                      styles.modalOption,
+                      selectedDb === db && styles.modalOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedDb(db);
+                      setDbModalVisible(false);
+                    }}
+                  >
+                    <Ionicons
+                      name={selectedDb === db ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={selectedDb === db ? COLORS.primary : COLORS.textLight}
+                    />
+                    <Text
                       style={[
-                        styles.modalOption,
-                        selectedDb === db && styles.modalOptionSelected,
+                        styles.modalOptionText,
+                        selectedDb === db && styles.modalOptionTextSelected,
                       ]}
-                      onPress={() => {
-                        setSelectedDb(db);
-                        setDbModalVisible(false);
-                      }}
                     >
-                      <Ionicons
-                        name={selectedDb === db ? "radio-button-on" : "radio-button-off"}
-                        size={20}
-                        color={selectedDb === db ? COLORS.primary : COLORS.textLight}
-                      />
-                      <Text
-                        style={[
-                          styles.modalOptionText,
-                          selectedDb === db && styles.modalOptionTextSelected,
-                        ]}
-                      >
-                        {db}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </Pressable>
-            </Modal>
-          </>
-        ) : null}
+                      {db}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Pressable>
+          </Modal>
+        </>
 
         {/* Email */}
         <TextInput
