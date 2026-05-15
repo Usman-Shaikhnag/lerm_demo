@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useState } from 'react';
 import DocumentPickerField from '@/components/DocumentPickerField';
+import DocumentCaptureField from '@/components/DocumentCaptureField';
 import {
     ActivityIndicator,
     Alert,
@@ -452,6 +453,34 @@ export default function ELNForm() {
                         />
                     </View>
                 </View>
+
+                {recordId !== 0 && (
+                    <>
+                        <Text style={styles.sectionHeader}>FTP Documents</Text>
+                        <View style={styles.group}>
+                            <DocumentCaptureField
+                                label="Witness Photo"
+                                model="lerm.eln"
+                                recordId={recordId}
+                                fieldName="witness_path"
+                                currentPath={record.witness_path || null}
+                                readonly={false}
+                                allowMultiple={false}
+                                onUploadSuccess={(path) => handleFieldChange('witness_path', path)}
+                            />
+                            <DocumentCaptureField
+                                label="Attachment"
+                                model="lerm.eln"
+                                recordId={recordId}
+                                fieldName="attachment_path"
+                                currentPath={record.attachment_path || null}
+                                readonly={false}
+                                allowMultiple={true}
+                                onUploadSuccess={(path) => handleFieldChange('attachment_path', path)}
+                            />
+                        </View>
+                    </>
+                )}
                 
                 <View style={{ height: 40 }} />
             </ScrollView>

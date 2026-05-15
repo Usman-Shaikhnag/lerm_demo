@@ -27,6 +27,7 @@ if (Constants.appOwnership !== 'expo') {
 
 import React, { useCallback, useEffect, useState } from 'react';
 import DocumentPickerField from '@/components/DocumentPickerField';
+import DocumentCaptureField from '@/components/DocumentCaptureField';
 import {
     ActivityIndicator,
     Alert,
@@ -830,7 +831,35 @@ export default function SampleForm() {
                         </View>
                     </>
                 )}
-                
+
+                {recordId !== 0 && (
+                    <>
+                        <Text style={styles.sectionHeader}>FTP Documents</Text>
+                        <View style={styles.group}>
+                            <DocumentCaptureField
+                                label="Report"
+                                model="lerm.srf.sample"
+                                recordId={recordId}
+                                fieldName="report_path"
+                                currentPath={record.report_path || null}
+                                readonly={false}
+                                allowMultiple={true}
+                                onUploadSuccess={(path) => handleFieldChange('report_path', path)}
+                            />
+                            <DocumentCaptureField
+                                label="Datasheet"
+                                model="lerm.srf.sample"
+                                recordId={recordId}
+                                fieldName="datasheet_path"
+                                currentPath={record.datasheet_path || null}
+                                readonly={false}
+                                allowMultiple={true}
+                                onUploadSuccess={(path) => handleFieldChange('datasheet_path', path)}
+                            />
+                        </View>
+                    </>
+                )}
+
                 <View style={{ height: 40 }} />
             </ScrollView>
 

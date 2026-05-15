@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import AddEditSampleWizard from '@/components/AddEditSampleWizard';
 import DocumentPickerField from '@/components/DocumentPickerField';
+import DocumentCaptureField from '@/components/DocumentCaptureField';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -571,6 +572,24 @@ export default function SRFForm() {
                             <Text style={styles.noSamplesText}>No samples attached.</Text>
                         )}
                     </View>
+                )}
+
+                {recordId !== 0 && (
+                    <>
+                        <Text style={styles.sectionHeader}>FTP Documents</Text>
+                        <View style={styles.group}>
+                            <DocumentCaptureField
+                                label="SRF Attachment"
+                                model="lerm.civil.srf"
+                                recordId={recordId}
+                                fieldName="attachment_path"
+                                currentPath={record.attachment_path || null}
+                                readonly={false}
+                                allowMultiple={true}
+                                onUploadSuccess={(path) => handleFieldChange('attachment_path', path)}
+                            />
+                        </View>
+                    </>
                 )}
 
                 <View style={{ height: 40 }} />
