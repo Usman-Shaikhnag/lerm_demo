@@ -3,14 +3,14 @@
     "name": "LERM",
     "slug": "lerm",
     "version": "1.0.1",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/lerm_app.png",
     "scheme": "lermdemo",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.esehatmeditechltd.lerm",
+      "bundleIdentifier": "com.lerm.civil",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "package": "com.esehatmeditechltd.lerm",
+      "package": "com.lerm.civil",
       "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/lerm_app.png",

@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.esehatmeditechltd.lerm'
+    namespace 'com.lerm.civil'
     defaultConfig {
-        applicationId 'com.esehatmeditechltd.lerm'
+        applicationId 'com.lerm.civil'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+
+        <record id="mechanical_concrete_cube_view" model="ir.ui.view">
+            <field name="name">mechanical.concrete.cube.form</field>
+            <field name="model">mechanical.concrete.cube</field>
+            <field name="arch" type="xml">
+                <form >
+                    <sheet>
+                        <field name="eln_state"/>
+                        <button type="object" class="oe_highlight" name="prefill_data" string="Prefill Data"/>
+                        <group>
+                            <field name="srf_id" invisible="1"/>
+                            <field name="sample_id" readonly="1" />
+                            <field name="parameter_id" invisible="1"/>
+                            <field name="eln_ref" readonly="1"/>
+                            <field name="grade" exception="grade"  string="Grade" identity="extra"/>   
+                             <field name="size_id" readonly="1"/>
+                        </group>
+
+
+                         <style>
+                        .blue-input input {
+                            background-color: #d8ecff !important;   /* हलका Blue background */
+                            border-color: #3b82f6 !important;        /* Blue border */ 
+                        }
+
+                        .o_list_view .o_data_cell.blue-input {
+                             background-color: #d8ecff !important;
+                             border-color: #3b82f6 !important;
+                             }
+
+                        /* Input when the cell goes into edit mode */
+                        .o_list_view .o_data_cell.blue-input input {
+                             background-color: #d8ecff !important;
+                             border-color: #3b82f6 !important;
+                            }
+                    </style>
+
+
+
+                        <div class="custom_table_borders" style="margin-top: 15px;">
+                            <field name="sample_parameters" nolabel="1">
+                                <tree>
+                                    <field name="parameter_name"/>
+                                    <field name="test_method"/>
+                                </tree>
+                            </field>
+                        </div>
+
+                        <group>
+                            <h1>
+                                <field name="name" readonly="1" nolabel="1"/>
+                            </h1>
+                        </group>
+                         <table class="table table-sm o_form_table table-bordered w-100 custom_table_borders">
+                            <tbody>
+                                <tr>
+                                    <td><label for="dia"></label></td>
+                                    <td><field name="dia"/></td>
+                                </tr>
+                                <tr>
+                                     <td><label for="coating_thickness"></label></td>
+                                     <td><field name="coating_thickness"/></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="continuity_coating"></label></td>
+                                    <td><field name="continuity_coating"/></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="adhesion_coating"></label></td>
+                                    <td><field name="adhesion_coating"/></td>
+                                </tr>
+                            </tbody>
+                         </table>
+                                
+
+                    
+
+
+
+
+
+
+
+
+
+
+                    
+
+                        <group style="margin-top: 20px;">
+
+                            <button type="object" class="oe_highlight" name="open_eln_page" string="Submit"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+       
+  
+   
+    </data>
+</odoo>

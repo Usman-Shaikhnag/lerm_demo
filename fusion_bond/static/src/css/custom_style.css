@@ -1,0 +1,11 @@
+
+.o_form_view .custom_table_borders tbody tr > td {
+    border: 2px solid black !important;
+}
+.o_form_view .custom_table_borders thead th {
+    border: 2px solid black !important;
+    background-color: #f1f1f1;
+    font-weight: bold;
+}
+
+

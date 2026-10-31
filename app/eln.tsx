@@ -1,3 +1,5 @@
+import DocumentCaptureField from '@/components/DocumentCaptureField';
+import DocumentPickerField from '@/components/DocumentPickerField';
 import Many2oneSelect from '@/components/Many2oneSelect';
 import { COLORS } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,19 +7,17 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useState } from 'react';
-import DocumentPickerField from '@/components/DocumentPickerField';
-import DocumentCaptureField from '@/components/DocumentCaptureField';
 import {
     ActivityIndicator,
     Alert,
     Platform,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    Switch
+    View
 } from 'react-native';
 
 const FIELD_NAMES = [
@@ -53,7 +53,7 @@ export default function ELNForm() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
-    
+
     // UI state
     const [showStartDatePicker, setShowStartDatePicker] = useState(false);
     const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -88,7 +88,7 @@ export default function ELNForm() {
             if (data.result?.success) {
                 const fetched = data.result.data;
                 const parsedRecord: any = { ...fetched };
-                
+
                 // M2O conversions
                 ['srf_id', 'sample_id', 'discipline', 'group', 'material', 'grade_id', 'size_id', 'technician'].forEach(field => {
                     if (Array.isArray(parsedRecord[field]) && parsedRecord[field].length === 2) {
@@ -201,9 +201,9 @@ export default function ELNForm() {
             if (data.result?.success && data.result?.res_model) {
                 router.push({
                     pathname: '/record-form',
-                    params: { 
-                        model: data.result.res_model, 
-                        record_id: data.result.res_id ? String(data.result.res_id) : undefined 
+                    params: {
+                        model: data.result.res_model,
+                        record_id: data.result.res_id ? String(data.result.res_id) : undefined
                     }
                 });
             } else {
@@ -335,15 +335,15 @@ export default function ELNForm() {
                     <Many2oneSelect label="Grade" model="lerm.grade.line" value={record.grade_id || null} onChange={(val) => handleFieldChange('grade_id', val)} readonly={isReadonly} />
                     <Many2oneSelect label="Size" model="lerm.size.line" value={record.size_id || null} onChange={(val) => handleFieldChange('size_id', val)} readonly={isReadonly} />
                     <Many2oneSelect label="Technician" model="res.users" value={record.technician || null} onChange={(val) => handleFieldChange('technician', val)} readonly={isReadonly} />
-                    
-                    <DocumentPickerField 
-                        label="Attachment" 
-                        fileName={record.attachment_name || null} 
-                        readonly={isReadonly} 
+
+                    <DocumentPickerField
+                        label="Attachment"
+                        fileName={record.attachment_name || null}
+                        readonly={isReadonly}
                         onSelect={(base64, name) => {
                             handleFieldChange('attachment', base64);
                             handleFieldChange('attachment_name', name);
-                        }} 
+                        }}
                     />
                 </View>
 
@@ -402,7 +402,7 @@ export default function ELNForm() {
 
                 {recordId !== 0 && record.is_product_based_calculation && (
                     <View style={{ marginBottom: 20 }}>
-                        <TouchableOpacity onPress={handleOpenForm} disabled={actionLoading} style={[styles.actionButton, { backgroundColor: COLORS.secondary, paddingVertical: 14, flexDirection: 'row', justifyContent: 'center', gap: 8 }]}>
+                        <TouchableOpacity onPress={handleOpenForm} disabled={actionLoading} style={[styles.actionButton, { backgroundColor: COLORS.primary, paddingVertical: 14, flexDirection: 'row', justifyContent: 'center', gap: 8 }]}>
                             {actionLoading ? <ActivityIndicator size="small" color="#fff" /> : (
                                 <>
                                     <Ionicons name="document-text-outline" size={20} color="#fff" />
@@ -419,7 +419,7 @@ export default function ELNForm() {
                         <Text style={styles.label}>Has Witness</Text>
                         <Switch value={record.has_witness || false} onValueChange={(val) => handleFieldChange('has_witness', val)} trackColor={{ true: COLORS.primary }} disabled={isReadonly} />
                     </View>
-                    
+
                     {record.has_witness && (
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Witness Name</Text>
@@ -443,12 +443,12 @@ export default function ELNForm() {
                 <Text style={styles.sectionHeader}>Remarks</Text>
                 <View style={styles.group}>
                     <View style={styles.inputContainer}>
-                        <TextInput 
-                            style={[styles.input, { height: 100, textAlignVertical: 'top' }, isReadonly && styles.readonlyInput]} 
-                            value={record.remarks || ''} 
-                            onChangeText={(t) => handleFieldChange('remarks', t)} 
-                            multiline 
-                            editable={!isReadonly} 
+                        <TextInput
+                            style={[styles.input, { height: 100, textAlignVertical: 'top' }, isReadonly && styles.readonlyInput]}
+                            value={record.remarks || ''}
+                            onChangeText={(t) => handleFieldChange('remarks', t)}
+                            multiline
+                            editable={!isReadonly}
                             placeholder="Enter remarks here..."
                         />
                     </View>
@@ -481,7 +481,7 @@ export default function ELNForm() {
                         </View>
                     </>
                 )}
-                
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </View>

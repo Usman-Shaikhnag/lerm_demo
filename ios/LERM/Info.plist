@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>lermdemo</string>
-          <string>com.esehatmeditechltd.lerm</string>
+          <string>com.lerm.civil</string>
         </array>
       </dict>
     </array>

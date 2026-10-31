@@ -2,17 +2,21 @@ import { COLORS } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     FlatList,
     Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
     RefreshControl,
     SectionList,
     Text,
     TextInput,
     TouchableOpacity,
     View,
+    ScrollView,
 } from 'react-native';
 import { styles } from '../assets/styles/records.styles.js';
 
@@ -39,13 +43,45 @@ export default function Records() {
     const [offset, setOffset] = useState(0);
     const [search, setSearch] = useState('');
     const [searchField, setSearchField] = useState('');
-    const [groupBy, setGroupBy] = useState('');
+    const [groupBy, setGroupBy] = useState(['lerm.civil.srf', 'lerm.eln'].includes(model) ? 'state' : '');
+    const [activeGroupFilter, setActiveGroupFilter] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
     const [error, setError] = useState(false);
 
     // Modal state for Search/Group dropdowns
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'search' | 'group'>('search');
+
+    // Scroll-aware bottom tab bar
+    const scrollY = useRef(0);
+    const tabBarTranslateY = useRef(new Animated.Value(0)).current;
+    const isTabBarVisible = useRef(true);
+
+    const onListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const currentY = event.nativeEvent.contentOffset.y;
+        const diff = currentY - scrollY.current;
+        scrollY.current = currentY;
+
+        // Only trigger when scrolled past a threshold to avoid jitter
+        if (currentY < 10) {
+            // At top, always show
+            if (!isTabBarVisible.current) {
+                isTabBarVisible.current = true;
+                Animated.spring(tabBarTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
+            }
+            return;
+        }
+
+        if (diff > 8 && isTabBarVisible.current) {
+            // Scrolling down → hide
+            isTabBarVisible.current = false;
+            Animated.spring(tabBarTranslateY, { toValue: 80, useNativeDriver: true, tension: 80, friction: 12 }).start();
+        } else if (diff < -8 && !isTabBarVisible.current) {
+            // Scrolling up → show
+            isTabBarVisible.current = true;
+            Animated.spring(tabBarTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
+        }
+    }, [tabBarTranslateY]);
 
     const LIMIT = 20;
 
@@ -138,8 +174,13 @@ export default function Records() {
             }
             group.data.push(r);
         });
-        return groups;
+        return groups.sort((a, b) => a.title.localeCompare(b.title));
     }, [records, groupBy]);
+
+    const displayedGroupedRecords = useMemo(() => {
+        if (!activeGroupFilter) return groupedRecords;
+        return groupedRecords.filter(g => g.title === activeGroupFilter);
+    }, [groupedRecords, activeGroupFilter]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -383,6 +424,8 @@ export default function Records() {
                 </View>
             )}
 
+
+
             {/* Dropdown Modal */}
             <Modal
                 visible={modalVisible}
@@ -451,7 +494,7 @@ export default function Records() {
                 groupBy ? (
                     <SectionList
                         key="list-view-grouped"
-                        sections={groupedRecords}
+                        sections={displayedGroupedRecords}
                         renderItem={renderListItem}
                         keyExtractor={(item) => String(item.id)}
                         renderSectionHeader={({ section: { title } }) => (
@@ -459,11 +502,13 @@ export default function Records() {
                                 <Text style={styles.sectionHeaderText}>{title}</Text>
                             </View>
                         )}
-                        contentContainerStyle={styles.listContainer}
+                        contentContainerStyle={[styles.listContainer, groupBy && groupedRecords.length > 0 && { paddingBottom: 70 }]}
                         showsVerticalScrollIndicator={false}
                         stickySectionHeadersEnabled={true}
                         onEndReached={onLoadMore}
                         onEndReachedThreshold={0.3}
+                        onScroll={onListScroll}
+                        scrollEventThrottle={16}
                         ListFooterComponent={renderFooter}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
@@ -485,6 +530,8 @@ export default function Records() {
                         showsVerticalScrollIndicator={false}
                         onEndReached={onLoadMore}
                         onEndReachedThreshold={0.3}
+                        onScroll={onListScroll}
+                        scrollEventThrottle={16}
                         ListFooterComponent={renderFooter}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
@@ -501,7 +548,7 @@ export default function Records() {
                 groupBy ? (
                     <FlatList
                         key="kanban-view-grouped"
-                        data={groupedRecords}
+                        data={displayedGroupedRecords}
                         renderItem={({ item: group }) => (
                             <View>
                                 <View style={styles.sectionHeaderRow}>
@@ -517,10 +564,12 @@ export default function Records() {
                             </View>
                         )}
                         keyExtractor={(item) => item.title}
-                        contentContainerStyle={styles.listContainer}
+                        contentContainerStyle={[styles.listContainer, groupBy && groupedRecords.length > 0 && { paddingBottom: 70 }]}
                         showsVerticalScrollIndicator={false}
                         onEndReached={onLoadMore}
                         onEndReachedThreshold={0.3}
+                        onScroll={onListScroll}
+                        scrollEventThrottle={16}
                         ListFooterComponent={renderFooter}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
@@ -544,6 +593,8 @@ export default function Records() {
                         showsVerticalScrollIndicator={false}
                         onEndReached={onLoadMore}
                         onEndReachedThreshold={0.3}
+                        onScroll={onListScroll}
+                        scrollEventThrottle={16}
                         ListFooterComponent={renderFooter}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
@@ -556,6 +607,32 @@ export default function Records() {
                         }
                     />
                 )
+            )}
+
+            {/* Floating Bottom Tab Bar */}
+            {groupBy && groupedRecords.length > 0 && (
+                <Animated.View style={[styles.groupTabsContainer, { transform: [{ translateY: tabBarTranslateY }] }]}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupTabsScroll}>
+                        <TouchableOpacity 
+                            style={[styles.groupTab, !activeGroupFilter && styles.groupTabActive]}
+                            onPress={() => setActiveGroupFilter(null)}
+                        >
+                            <Text style={[styles.groupTabText, !activeGroupFilter && styles.groupTabTextActive]}>All</Text>
+                        </TouchableOpacity>
+                        {groupedRecords.map(g => (
+                            <TouchableOpacity 
+                                key={g.key}
+                                style={[styles.groupTab, activeGroupFilter === g.title && styles.groupTabActive]}
+                                onPress={() => setActiveGroupFilter(g.title)}
+                            >
+                                <Text style={[styles.groupTabText, activeGroupFilter === g.title && styles.groupTabTextActive]}>{g.title}</Text>
+                                <View style={[styles.groupTabBadge, activeGroupFilter === g.title && styles.groupTabBadgeActive]}>
+                                    <Text style={[styles.groupTabBadgeText, activeGroupFilter === g.title && styles.groupTabBadgeTextActive]}>{g.data.length}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </Animated.View>
             )}
 
             {/* Floating Action Button (FAB) for Create */}

@@ -2,12 +2,12 @@ import Many2oneSelect from '@/components/Many2oneSelect';
 import { COLORS } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Constants from 'expo-constants';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as IntentLauncher from 'expo-intent-launcher';
-import Constants from 'expo-constants';
 
 let Notifications: any = null;
 if (Constants.appOwnership !== 'expo') {
@@ -25,21 +25,21 @@ if (Constants.appOwnership !== 'expo') {
     }
 }
 
-import React, { useCallback, useEffect, useState } from 'react';
-import DocumentPickerField from '@/components/DocumentPickerField';
 import DocumentCaptureField from '@/components/DocumentCaptureField';
+import DocumentPickerField from '@/components/DocumentPickerField';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    Switch,
-    Modal
+    View
 } from 'react-native';
 
 const FIELD_NAMES = [
@@ -128,7 +128,7 @@ export default function SampleForm() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
-    
+
     // Allotment Modal State
     const [allotmentModalVisible, setAllotmentModalVisible] = useState(false);
     const [isReallocation, setIsReallocation] = useState(false);
@@ -182,7 +182,7 @@ export default function SampleForm() {
         } catch (e) {
             console.warn("Notifications listener error", e);
         }
-        
+
         return () => {
             if (subscription) subscription.remove();
         };
@@ -213,7 +213,7 @@ export default function SampleForm() {
             if (data.result?.success) {
                 const fetched = data.result.data;
                 const parsedRecord: any = { ...fetched };
-                
+
                 // M2O conversions
                 ['srf_id', 'discipline_id', 'group_id', 'material_id', 'grade_id', 'size_id', 'lab_location', 'uom_id'].forEach(field => {
                     if (Array.isArray(parsedRecord[field]) && parsedRecord[field].length === 2) {
@@ -270,9 +270,9 @@ export default function SampleForm() {
                 } else if (val !== undefined && val !== null) {
                     // For selection fields that might be boolean false or 0
                     if (f === 'days_casting' && val) {
-                         valuesToSave[f] = String(val);
+                        valuesToSave[f] = String(val);
                     } else {
-                         valuesToSave[f] = val;
+                        valuesToSave[f] = val;
                     }
                 } else {
                     valuesToSave[f] = false; // Reset field if null
@@ -468,7 +468,7 @@ export default function SampleForm() {
             if (data.result?.success && data.result?.report_name) {
                 const reportName = data.result.report_name;
                 const reportData = data.result.data || {};
-                
+
                 // 2. Fetch the PDF as base64 using the JSON-RPC render_pdf endpoint
                 const renderRes = await fetch(`${serverUrl}/mobile/render_pdf`, {
                     method: 'POST',
@@ -488,10 +488,10 @@ export default function SampleForm() {
                 });
 
                 const renderData = await renderRes.json();
-                
+
                 if (renderData.result?.success && renderData.result?.pdf_base64) {
                     const filename = renderData.result.filename || `${(record.kes_no || 'report').replace(/[/\\?%*:|"<>]/g, '-')}.pdf`;
-                    
+
                     if (Platform.OS === 'android') {
                         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                         if (permissions.granted) {
@@ -517,12 +517,12 @@ export default function SampleForm() {
                                 } else {
                                     // Fallback for Expo Go
                                     Alert.alert(
-                                        'Success', 
-                                        'Report downloaded successfully.', 
+                                        'Success',
+                                        'Report downloaded successfully.',
                                         [
                                             { text: 'OK', style: 'cancel' },
-                                            { 
-                                                text: 'Open Report', 
+                                            {
+                                                text: 'Open Report',
                                                 onPress: () => {
                                                     IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
                                                         data: newFileUri,
@@ -604,7 +604,7 @@ export default function SampleForm() {
 
                 {recordId !== 0 && record.eln_id && (
                     <TouchableOpacity
-                        style={styles.elnLinkButton}
+                        style={[styles.elnLinkButton, { backgroundColor: COLORS.primary }]}
                         onPress={() => {
                             const elnId = Array.isArray(record.eln_id) ? record.eln_id[0] : record.eln_id;
                             const elnName = Array.isArray(record.eln_id) ? record.eln_id[1] : `ELN #${elnId}`;
@@ -614,9 +614,9 @@ export default function SampleForm() {
                             });
                         }}
                     >
-                        <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
-                        <Text style={styles.elnLinkText}>Open ELN → {Array.isArray(record.eln_id) ? record.eln_id[1] : `#${record.eln_id}`}</Text>
-                        <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                        <Ionicons name="document-text-outline" size={18} color={COLORS.white} />
+                        <Text style={[styles.elnLinkText, { color: COLORS.white }]}>Open ELN → {Array.isArray(record.eln_id) ? record.eln_id[1] : `#${record.eln_id}`}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={COLORS.white} />
                     </TouchableOpacity>
                 )}
 
@@ -651,10 +651,10 @@ export default function SampleForm() {
 
                     return (
                         <View style={styles.actionsContainer}>
-                            <TouchableOpacity style={styles.actionsToggle} onPress={() => setActionsExpanded(!actionsExpanded)}>
-                                <Ionicons name="ellipsis-horizontal-circle-outline" size={20} color={COLORS.primary} />
-                                <Text style={styles.actionsToggleText}>Actions ({actions.length})</Text>
-                                <Ionicons name={actionsExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.primary} />
+                            <TouchableOpacity style={[styles.actionsToggle, { backgroundColor: COLORS.primary }]} onPress={() => setActionsExpanded(!actionsExpanded)}>
+                                <Ionicons name="ellipsis-horizontal-circle-outline" size={20} color={COLORS.white} />
+                                <Text style={[styles.actionsToggleText, { color: COLORS.white }]}>Actions ({actions.length})</Text>
+                                <Ionicons name={actionsExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.white} />
                             </TouchableOpacity>
                             {actionsExpanded && (
                                 <View style={styles.actionsMenu}>
@@ -686,12 +686,12 @@ export default function SampleForm() {
                     <Many2oneSelect label="Discipline" model="lerm_civil.discipline" value={record.discipline_id || null} onChange={(val) => handleFieldChange('discipline_id', val)} readonly={true} />
                     <Many2oneSelect label="Group" model="lerm_civil.group" value={record.group_id || null} onChange={(val) => handleFieldChange('group_id', val)} readonly={true} />
                     <Many2oneSelect label="Material" model="product.template" value={record.material_id || null} onChange={(val) => handleFieldChange('material_id', val)} readonly={true} />
-                    
+
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Brand</Text>
                         <TextInput style={[styles.input, styles.readonlyInput]} value={record.brand || ''} onChangeText={(t) => handleFieldChange('brand', t)} editable={false} />
                     </View>
-                    
+
                     <Many2oneSelect label="Grade" model="lerm.grade.line" value={record.grade_id || null} onChange={(val) => handleFieldChange('grade_id', val)} readonly={true} />
                     <Many2oneSelect label="Size" model="lerm.size.line" value={record.size_id || null} onChange={(val) => handleFieldChange('size_id', val)} readonly={true} />
                 </View>
@@ -705,7 +705,7 @@ export default function SampleForm() {
 
                     <SelectionField label="Sample Condition" options={SAMPLE_CONDITION_OPTIONS} value={record.sample_condition} onChange={(val: string) => handleFieldChange('sample_condition', val)} readonly={isReadonly} />
                     <SelectionField label="Scope" options={SCOPE_OPTIONS} value={record.scope} onChange={(val: string) => handleFieldChange('scope', val)} readonly={isReadonly} />
-                    
+
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Sample Received Date (YYYY-MM-DD)</Text>
                         <TouchableOpacity disabled={isReadonly} onPress={() => setShowReceivedDatePicker(true)}>
@@ -732,20 +732,20 @@ export default function SampleForm() {
                     </View>
 
                     <Many2oneSelect label="Lab Location" model="lerm.lab.location" value={record.lab_location || null} onChange={(val) => handleFieldChange('lab_location', val)} readonly={isReadonly} />
-                    
+
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Sample Description</Text>
                         <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }, isReadonly && styles.readonlyInput]} value={record.sample_description || ''} onChangeText={(t) => handleFieldChange('sample_description', t)} multiline editable={!isReadonly} />
                     </View>
-                    
-                    <DocumentPickerField 
-                        label="Attachment" 
-                        fileName={record.attachment_name || null} 
-                        readonly={isReadonly} 
+
+                    <DocumentPickerField
+                        label="Attachment"
+                        fileName={record.attachment_name || null}
+                        readonly={isReadonly}
                         onSelect={(base64, name) => {
                             handleFieldChange('attachment', base64);
                             handleFieldChange('attachment_name', name);
-                        }} 
+                        }}
                     />
                 </View>
 
@@ -755,7 +755,7 @@ export default function SampleForm() {
                         <Text style={styles.label}>Has Witness</Text>
                         <Switch value={record.has_witness || false} onValueChange={(val) => handleFieldChange('has_witness', val)} trackColor={{ true: COLORS.primary }} disabled={isReadonly} />
                     </View>
-                    
+
                     {record.has_witness && (
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Witness Name</Text>
@@ -771,7 +771,7 @@ export default function SampleForm() {
                     {record.casting && (
                         <>
                             <SelectionField label="Days of Testing" options={DAYS_CASTING_OPTIONS} value={record.days_casting ? String(record.days_casting) : ''} onChange={(val: string) => handleFieldChange('days_casting', val)} readonly={isReadonly} />
-                            
+
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Date of Casting (YYYY-MM-DD)</Text>
                                 <TouchableOpacity disabled={isReadonly} onPress={() => setShowCastingDatePicker(true)}>
@@ -873,23 +873,23 @@ export default function SampleForm() {
                                 <Ionicons name="close" size={24} color={COLORS.text} />
                             </TouchableOpacity>
                         </View>
-                        
+
                         <ScrollView style={styles.modalBody}>
                             {/* Toggle Allocation Type */}
-                            <SelectionField 
-                                label="Allocate By" 
-                                options={[{label: 'Sample', value: 'sample'}, {label: 'Parameter', value: 'parameter'}]} 
-                                value={allocationType} 
-                                onChange={setAllocationType} 
+                            <SelectionField
+                                label="Allocate By"
+                                options={[{ label: 'Sample', value: 'sample' }, { label: 'Parameter', value: 'parameter' }]}
+                                value={allocationType}
+                                onChange={setAllocationType}
                             />
-                            
+
                             {/* Toggle Reallocation Mode if reallot */}
                             {isReallocation && (
-                                <SelectionField 
-                                    label="Reallocation Mode" 
-                                    options={[{label: 'Full', value: 'full'}, {label: 'Partial', value: 'partial'}]} 
-                                    value={reallocationMode} 
-                                    onChange={setReallocationMode} 
+                                <SelectionField
+                                    label="Reallocation Mode"
+                                    options={[{ label: 'Full', value: 'full' }, { label: 'Partial', value: 'partial' }]}
+                                    value={reallocationMode}
+                                    onChange={setReallocationMode}
                                 />
                             )}
 
@@ -918,18 +918,18 @@ export default function SampleForm() {
                                             paramName = `Parameter #${param}`;
                                         }
                                         return (
-                                            <View key={paramId} style={{marginBottom: 12}}>
+                                            <View key={paramId} style={{ marginBottom: 12 }}>
                                                 <Many2oneSelect
                                                     label={String(paramName)}
                                                     model="res.users"
                                                     value={parameterAssignments[paramId] || null}
-                                                    onChange={(val) => setParameterAssignments((prev: any) => ({...prev, [paramId]: val}))}
+                                                    onChange={(val) => setParameterAssignments((prev: any) => ({ ...prev, [paramId]: val }))}
                                                 />
                                             </View>
                                         );
                                     })}
                                     {(!record.parameters || record.parameters.length === 0) && (
-                                        <Text style={{color: COLORS.textLight, fontStyle: 'italic'}}>No parameters found.</Text>
+                                        <Text style={{ color: COLORS.textLight, fontStyle: 'italic' }}>No parameters found.</Text>
                                     )}
                                 </View>
                             )}
@@ -939,8 +939,8 @@ export default function SampleForm() {
                             <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setAllotmentModalVisible(false)}>
                                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalSaveBtn, ((allocationType === 'sample' && !allotmentTechnician) || actionLoading) && { opacity: 0.6 }]} 
+                            <TouchableOpacity
+                                style={[styles.modalSaveBtn, ((allocationType === 'sample' && !allotmentTechnician) || actionLoading) && { opacity: 0.6 }]}
                                 onPress={handleAllotSubmit}
                                 disabled={(allocationType === 'sample' && !allotmentTechnician) || actionLoading}
                             >
@@ -950,7 +950,7 @@ export default function SampleForm() {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </View >
     );
 }
 

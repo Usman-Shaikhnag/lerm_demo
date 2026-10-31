@@ -259,7 +259,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.esehatmeditechltd.lerm";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.lerm.civil";
 				PRODUCT_NAME = "LERM";
 				SWIFT_OBJC_BRIDGING_HEADER = "LERM/LERM-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -288,7 +288,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.esehatmeditechltd.lerm";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.lerm.civil";
 				PRODUCT_NAME = "LERM";
 				SWIFT_OBJC_BRIDGING_HEADER = "LERM/LERM-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;

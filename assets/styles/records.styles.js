@@ -450,4 +450,64 @@ export const styles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 6,
     },
+
+    /* ── Group Tabs (Floating Bottom Tab Bar) ── */
+    groupTabsContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: COLORS.white,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 8,
+    },
+    groupTabsScroll: {
+        paddingHorizontal: 12,
+    },
+    groupTab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+        marginRight: 4,
+    },
+    groupTabActive: {
+        borderBottomColor: COLORS.primary,
+    },
+    groupTabText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: COLORS.textLight,
+    },
+    groupTabTextActive: {
+        color: COLORS.primary,
+        fontWeight: '700',
+    },
+    groupTabBadge: {
+        backgroundColor: COLORS.border,
+        borderRadius: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        marginLeft: 6,
+        minWidth: 20,
+        alignItems: 'center',
+    },
+    groupTabBadgeActive: {
+        backgroundColor: COLORS.primary,
+    },
+    groupTabBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: COLORS.text,
+    },
+    groupTabBadgeTextActive: {
+        color: COLORS.white,
+    },
 });
